@@ -3,155 +3,200 @@
 
 using namespace sf;
 
-///Создаём плитки
-int N = 30, M = 20;
-int ts = 25;
+const int M = 20; /// высота игрового поля
+const int N = 10; /// ширина игрового поля
 
-int dir = 2, num = 4; ///Напрявление движения змейки и количество плиток, из которых состоит змейка
+int field[M][N] = { 0 }; /// игровое поле
 
-bool game = true;
+/// Массив фигурок-тетрамино
+int figures[7][4] =
+        {
+                1,3,5,7, // I
+                2,4,5,7, // Z
+                3,5,4,6, // S
+                3,5,4,7, // T
+                2,3,5,7, // L
+                3,5,7,6, // J
+                2,3,4,5, // O
+        };
 
-///Задаём структуру змейки
-struct Snake {
-    int x, y;
-} s[600];
-
-///Задаём структуру фрукта
-struct Fruct{
-    int x, y;
-} f;
-
-///Задаём тип для создания игры
-void Tick() {
-    for (int i = num; i > 0; i--) { ///первичные координыты змейки
-        s[i].x = s[i - 1].x;
-        s[i].y = s[i - 1].y;
-    }
-
-///Создаём условия для движения змейки в разные стороны
-    if (dir == 0)
-        s[0].y += 1;
-    if (dir == 1)
-        s[0].x -= 1;
-    if (dir == 2)
-        s[0].x += 1;
-    if (dir == 3)
-        s[0].y -= 1;
-
-///Задаём условия, чтобы змейка не выходила за пределы экрана
-    if (s[0].x > N)
-        s[0].x = 0;
-    if (s[0].x < 0)
-        s[0].x = N;
-    if (s[0].y > M)
-        s[0].y = 0;
-    if (s[0].y < 0)
-        s[0].y = M;
-
-    if ((s[0].x == f.x) && (s[0].y == f.y)) { ///Условния если змейка съедает яблоко
-        num++;
-
-        f.x = rand() % N;
-        f.y = rand() % M;
-    }
-
-    for (int i = 1; i < num; i++)
-        if ((s[0].x == s[i].x) && (s[0].y == s[i].y))
-            game = false;
-}
-
-///Функция игры
-int main()
+struct Point
 {
+    int x, y;
+} a[4], b[4];
+
+/// Проверка на выход за границы игрового поля
+bool check()
+{
+    for (int i = 0; i < 4; i++)
+        if (a[i].x < 0 || a[i].x >= N || a[i].y >= M) return 0;
+        else if (field[a[i].y][a[i].x]) return 0;
+
+    return 1;
+
+};
+
+
+int main() {
     srand(time(0));
 
-    RenderWindow window(VideoMode(ts * N, ts * M), "Snake!");
+    RenderWindow window(VideoMode(320, 480), "The Game!");
 
-///Подключаем текстуры и игре
-    Texture t;
-    t.loadFromFile("/home/yaroslav/CLionProjects/untitled/Krita/tiles.png");
-    Sprite tiles(t);
+    /// Создание и загрузка текстуры
+    Texture texture, texture_background, texture_frame;
+    texture.loadFromFile("/home/yaroslav/CLionProjects/GameRepo/Krita/tiles.png");
+    texture_background.loadFromFile("/home/yaroslav/CLionProjects/GameRepo/Krita/background.png");
+    texture_frame.loadFromFile("/home/yaroslav/CLionProjects/GameRepo/Krita/frame.png");
 
-    Texture sn;
-    sn.loadFromFile("/home/yaroslav/CLionProjects/untitled/Krita/snake.png");
-    Sprite snake(sn);
+    /// Создание спрайта
+    Sprite sprite(texture), sprite_background(texture_background), sprite_frame(texture_frame);
 
-    Texture ap;
-    ap.loadFromFile("/home/yaroslav/CLionProjects/untitled/Krita/apple.png");
-    Sprite apple(ap);
+    /// Вырезаем из спрайта отдельный квадратик размером 18х18 пикселей
+    sprite.setTextureRect(IntRect(0, 0, 18, 18));
 
-    Texture go;
-    go.loadFromFile("/home/yaroslav/CLionProjects/untitled/Krita/gameover.png");
-    Sprite gameover(go);
-    gameover.setPosition(0, 175);
+    /// Переменные для горизонтального перемещения и вращения
+    int dx = 0;
+    bool rotate = 0;
+    int colorNum = 1;
+    bool beginGame = true;
+    int n = rand() % 7;
 
-    f.x = 10;
-    f.y = 10;
+    /// Переменные для таймера и задержки
+    float timer = 0, delay = 0.3;
 
-///Создаём привязку ко времени, чтобы змейка двигалась с определённой скоростью
+    /// Часы (таймер)
     Clock clock;
-    float timer = 0, delay = 0.1;
 
-    while (window.isOpen())
-    {
+
+    /// Главный цикл приложения. Выполняется, пока открыто окно
+    while (window.isOpen()) {
+        /// Получаем время, прошедшее с начала отсчета, и конвертируем его в секунды
         float time = clock.getElapsedTime().asSeconds();
         clock.restart();
         timer += time;
 
+        /// Обрабатываем очередь событий в цикле
         Event event;
-        while (window.pollEvent(event))
-        {
+        while (window.pollEvent(event)) {
+            /// Пользователь нажал на «крестик» и хочет закрыть окно
             if (event.type == Event::Closed)
+                /// тогда закрываем его
                 window.close();
+
+            /// Была нажата кнопка на клавиатуре
+            if (event.type == Event::KeyPressed)
+                ///Движение вверх
+                if (event.key.code == Keyboard::Up) rotate = true;
+                    ///Движение влево
+                else if (event.key.code == Keyboard::Left) dx = -1;
+                    ///Движение вправо
+                else if (event.key.code == Keyboard::Right) dx = 1;
         }
 
-///Задаём типы для управления змейкой  помощью клавиатуры
-        if (Keyboard::isKeyPressed(Keyboard::Left))
-            dir = 1;
-        if (Keyboard::isKeyPressed(Keyboard::Right))
-            dir = 2;
-        if (Keyboard::isKeyPressed(Keyboard::Up))
-            dir = 3;
-        if (Keyboard::isKeyPressed(Keyboard::Down))
-            dir = 0;
+        /// Нажали кнопку "вниз". Ускоряем падение тетрамино
+        if (Keyboard::isKeyPressed(Keyboard::Down)) delay = 0.05;
 
-        if (timer > delay && game) { ///Движение змейки
+        /// Горизонтальное перемещение ///
+        for (int i = 0; i < 4; i++) {
+            b[i] = a[i];
+            a[i].x += dx;
+        }
+
+        /// Вышли за пределы поля после перемещения? Тогда возвращаем старые координаты
+        if (!check()) for (int i = 0; i < 4; i++) a[i] = b[i];
+
+
+        /// Вращение ///
+        if (rotate) {
+            Point p = a[1]; /// задаем центр вращения
+            for (int i = 0; i < 4; i++) {
+                int x = a[i].y - p.y; //y-y0
+                int y = a[i].x - p.x; //x-x0
+                a[i].x = p.x - x;
+                a[i].y = p.y + y;
+            }
+            /// Вышли за пределы поля после поворота? Тогда возвращаем старые координаты
+            if (!check()) { for (int i = 0; i < 4; i++) a[i] = b[i]; }
+
+        }
+
+        /// Движение тетрамино вниз (Тик таймера) ///
+        if (timer > delay) {
+            for (int i = 0; i < 4; i++) {
+                b[i] = a[i];
+                a[i].y += 1;
+            }
+            if (!check()) {
+                for (int i = 0; i < 4; i++) field[b[i].y][b[i].x] = colorNum;
+                colorNum = 1 + rand() % 7;
+                n = rand() % 7;
+                for (int i = 0; i < 4; i++) {
+                    a[i].x = figures[n][i] % 2;
+                    a[i].y = figures[n][i] / 2;
+                }
+
+            }
             timer = 0;
-            Tick();
+
         }
 
-        window.clear();
+        ///Проверка линии///
+        int k = M - 1;
+        for (int i = M - 1; i > 0; i--) {
+            int count = 0;
+            for (int j = 0; j < N; j++) {
+                if (field[i][j]) count++;
+                field[k][j] = field[i][j];
+            }
+            if (count < N) k--;
+        }
 
+        ///Первое появление тетрамино на поле
+        if (beginGame) {
+            beginGame = false;
+            n = rand() % 7;
+            for (int i = 0; i < 4; i++) {
+                a[i].x = figures[n][i] % 2;
+                a[i].y = figures[n][i] / 2;
+            }
+        }
+        dx = 0;
+        rotate = 0;
+        delay = 0.3;
 
-        for (int i=0; i<N; i++)
-            for (int j = 0; j < M; j++) {
-                tiles.setPosition(i * ts, j * ts);
-                window.draw(tiles);
+        ///Отрисовка///
+
+        /// Задаем цвет фона - белый
+        window.clear(Color::White);
+        window.draw(sprite_background);
+        for (int i = 0; i < M; i++)
+            for (int j = 0; j < N; j++) {
+                if (field[i][j] == 0) continue;
+                sprite.setTextureRect(IntRect(field[i][j] * 18, 0, 18, 18));
+                sprite.setPosition(j * 18, i * 18);
+                sprite.move(28, 31); // смещение
+                window.draw(sprite);
             }
 
-///Задаём цикл для отображения змейки
-        for (int i = 0; i < num; i++) {
-            if (i != 0)
-                snake.setTextureRect(IntRect(0, 0, ts, ts));
-            else
-                snake.setTextureRect(IntRect(dir*ts, ts, ts, ts));
+        for (int i = 0; i < 4; i++) {
+            /// Разукрашиваем тетрамино
+            sprite.setTextureRect(IntRect(colorNum * 18, 0, 18, 18));
 
-            if (!game && i == 1)
-                snake.setTextureRect(IntRect(dir * ts, ts*2, ts, ts));
+            /// Устанавливаем позицию каждого кусочка тетрамино
+            sprite.setPosition(a[i].x * 18, a[i].y * 18);
 
-            snake.setPosition(s[i].x * ts, s[i].y * ts);
-            window.draw(snake);
+            sprite.move(28, 31); // смещение
+
+            /// Отрисовка спрайта
+            window.draw(sprite);
         }
+        /// Отрисовка фрейма
+        window.draw(sprite_frame);
 
-        apple.setPosition(f.x * ts, f.y * ts);
-        window.draw(apple);
-
-///Окончание игры
-        if (!game)
-            window.draw(gameover);
-
+        /// Отрисовка окна
         window.display();
     }
 
     return 0;
+
 }
